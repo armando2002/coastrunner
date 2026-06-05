@@ -123,17 +123,18 @@ function Road.build()
   trackLen = N * SEG_LEN
 
   -- LEVEL 1: sparse roadside scatter so a new driver isn't punished.
-  -- Palms sit just off the road; chevron signs hug the edge. Both collidable.
+  -- Props sit beyond a free "shoulder": you can run wide onto the grass (speed
+  -- penalty only) and only crash if you actually line up with a trunk/post.
   for i=1,N do
     local s = segments[i]
     if i % 22 == 0 then
-      addSprite(i, imgPalm, -1.5 - (i%3)*0.15, 0.55)   -- left, off-road
+      addSprite(i, imgPalm, -1.7 - (i%3)*0.15, 0.16)   -- left, set back; trunk-width hitbox
     elseif i % 22 == 11 then
-      addSprite(i, imgPalm,  1.5 + (i%3)*0.15, 0.55)    -- right, off-road
+      addSprite(i, imgPalm,  1.7 + (i%3)*0.15, 0.16)    -- right
     end
     -- an occasional chevron sign ahead of a real curve change
     if i < N and math.abs(segments[i+1].curve - s.curve) > 2.0 and i % 17 == 0 then
-      addSprite(i, imgSign, s.curve > 0 and 1.35 or -1.35, 0.45)
+      addSprite(i, imgSign, s.curve > 0 and 1.5 or -1.5, 0.18)
     end
   end
 end

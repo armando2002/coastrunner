@@ -132,10 +132,11 @@ local function drawPlayer()
 
   -- crash tumble: cartwheel spin + a hop arc + a scale pulse + sideways skid
   if crashing then
-    local p     = 1 - (crashT / CRASH_FRAMES)          -- 0..1 through the crash
-    local hop   = math.sin(p * math.pi) * 26           -- lifts then drops
-    local scale = 1.7 * (1.0 - 0.35 * math.sin(p * math.pi))
-    local cxp   = HALF_W + math.sin(p * math.pi * 2) * 24
+    local p    = 1 - (crashT / CRASH_FRAMES)              -- 0..1 through the crash
+    local rise = math.sin(math.min(1, p * 1.7) * math.pi) -- peaks early (~p=0.29) then settles
+    local hop   = rise * 30                                -- lifts then drops
+    local scale = 1.7 * (1.0 - 0.4 * rise)
+    local cxp   = HALF_W + math.sin(p * math.pi * 2) * 26
     local cyp   = SCREEN_H - (h * 1.7) / 2 + 6 - hop
     gfx.setColor(gfx.kColorBlack)
     img:drawRotated(cxp, cyp, crashSpin, scale)
@@ -214,9 +215,10 @@ local function updateDriving()
   if Road.collisionAt(position, playerX) then
     crashing  = true
     crashT    = CRASH_FRAMES
-    crashSpin = 0
+    crashSpin = 90          -- instant quarter-turn kick so contact reads immediately
     damage    = damage + 1
     speed     = MAX_SPEED * 0.05
+    shake     = 6
     Audio.blip(110, 0.18)
     return
   end
