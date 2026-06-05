@@ -1,5 +1,5 @@
--- main.lua -- CoastRunner : an OutRun-style pseudo-3D racer for Playdate
--- Controls: CRANK = steer | A = gas | B = brake | D-pad Up = high gear, Down = low
+-- main.lua -- Meowta Racer : an 80s-style pseudo-3D arcade racer for Playdate
+-- Controls: CRANK or D-pad ◄► = steer | A = gas | B = brake | D-pad ▲▼ = HI/LO gear
 
 import "CoreLibs/graphics"
 import "CoreLibs/object"
@@ -36,7 +36,7 @@ local CRASH_SPIN   <const> = 900        -- total degrees of cartwheel
 ----------------------------------------------------------------------
 -- State
 ----------------------------------------------------------------------
-local mode = "title"      -- "title" | "play"
+local mode = "title"      -- "title" | "ready" | "play"
 local position = 0
 local playerX  = 0
 local speed    = 0
@@ -45,6 +45,7 @@ local steerVis = 0        -- smoothed steering for sprite/lean
 local shake    = 0
 local distance = 0
 local bestDist = 0
+local steerInput = "none" -- "crank" | "dpad" | "none": what the player is steering with
 
 local crashing  = false   -- in a crash tumble?
 local crashT    = 0       -- frames left in the crash
@@ -54,7 +55,9 @@ local damage    = 0       -- collisions this run
 local bg, bgW, bgH
 local bgX = 0
 local player           -- imagetable
+local titleImg         -- attract-screen background
 local hudFont
+local blink = 0        -- counter for the blinking prompt
 
 ----------------------------------------------------------------------
 -- Setup
@@ -65,6 +68,7 @@ local function setup()
   bg = gfx.image.new("images/bg")
   bgW, bgH = bg:getSize()
   player = gfx.imagetable.new("images/meowta")
+  titleImg = gfx.image.new("images/title")
   Road.build()
   Audio.init()
   Audio.titleStart()
@@ -74,6 +78,7 @@ local function resetRun()
   position, playerX, speed, gear = 0, 0, 0, 1
   steerVis, shake, distance = 0, 0, 0
   crashing, crashT, crashSpin, damage = false, 0, 0, 0
+  steerInput = "none"
 end
 
 ----------------------------------------------------------------------
@@ -111,7 +116,8 @@ local function drawHud()
   gfx.setColor(gfx.kColorBlack); gfx.drawRect(HALF_W-34, 2, 68, 16)
   gfx.drawTextAligned("DMG " .. damage, HALF_W, 4, kTextAlignment.center)
 
-  if playdate.isCrankDocked() then
+  -- crank-docked warning: only when the player isn't already steering with the d-pad
+  if playdate.isCrankDocked() and steerInput ~= "dpad" then
     gfx.setColor(gfx.kColorWhite); gfx.fillRect(SCREEN_W-150, SCREEN_H-18, 148, 16)
     gfx.setColor(gfx.kColorBlack)
     gfx.drawText("undock crank to steer", SCREEN_W-146, SCREEN_H-17)
@@ -193,8 +199,15 @@ local function updateDriving()
   local crankChange = playdate.getCrankChange()
   local steerGain = 0.4 + 0.6 * speedPercent
   local steer = crankChange * STEER_K * steerGain
-  if playdate.buttonIsPressed(playdate.kButtonLeft)  then steer = steer - DPAD_STEER * steerGain end
-  if playdate.buttonIsPressed(playdate.kButtonRight) then steer = steer + DPAD_STEER * steerGain end
+  local leftHeld  = playdate.buttonIsPressed(playdate.kButtonLeft)
+  local rightHeld = playdate.buttonIsPressed(playdate.kButtonRight)
+  if leftHeld  then steer = steer - DPAD_STEER * steerGain end
+  if rightHeld then steer = steer + DPAD_STEER * steerGain end
+  if leftHeld or rightHeld then
+    steerInput = "dpad"
+  elseif crankChange ~= 0 and not playdate.isCrankDocked() then
+    steerInput = "crank"
+  end
   playerX = playerX + steer
 
   -- centrifugal force on curves
@@ -260,23 +273,49 @@ local function updateCrash()
 end
 
 ----------------------------------------------------------------------
--- Title screen
+-- Title screen (attract) -- no control text here
 ----------------------------------------------------------------------
 local function drawTitle()
-  drawBackground()
-  -- road stub for vibe
-  Road.render(0, 0)
+  titleImg:draw(0, 0)
 
+  -- hero car cruising on the grid
+  local img = player:getImage(1)
+  local w, h = img:getSize()
+  local s = 1.35
+  img:drawScaled(HALF_W - (w * s) / 2, SCREEN_H - h * s - 22, s)
+
+  -- blinking prompt (white, sits on the dark grid)
+  blink = (blink + 1) % 60
+  if blink < 42 then
+    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+    gfx.drawTextAligned("PRESS Ⓐ TO START", HALF_W, SCREEN_H - 16, kTextAlignment.center)
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+  end
+
+  gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+  gfx.drawText("© 2026 NWSW", 6, 6)
+  gfx.setImageDrawMode(gfx.kDrawModeCopy)
+end
+
+----------------------------------------------------------------------
+-- Controls screen (shown after START, before driving)
+----------------------------------------------------------------------
+local function drawReady()
+  gfx.clear(gfx.kColorBlack)
   local cx = HALF_W
-  gfx.setColor(gfx.kColorWhite); gfx.fillRect(cx-150, 70, 300, 58)
-  gfx.setColor(gfx.kColorBlack); gfx.drawRect(cx-150, 70, 300, 58)
-  gfx.drawTextAligned("* C O A S T   R U N N E R *", cx, 80, kTextAlignment.center)
-  gfx.drawTextAligned("crank to steer   Ⓐ gas   Ⓑ brake", cx, 100, kTextAlignment.center)
-  gfx.drawTextAligned("D-pad up/down = HI / LO gear", cx, 112, kTextAlignment.center)
 
-  gfx.setColor(gfx.kColorWhite); gfx.fillRect(cx-90, SCREEN_H-40, 180, 20)
-  gfx.setColor(gfx.kColorBlack); gfx.drawRect(cx-90, SCREEN_H-40, 180, 20)
-  gfx.drawTextAligned("press Ⓐ to drive", cx, SCREEN_H-37, kTextAlignment.center)
+  gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+  gfx.drawTextAligned("- HOW TO DRIVE -", cx, 34, kTextAlignment.center)
+  gfx.drawTextAligned("CRANK  or  ◄ ►    steer", cx, 74, kTextAlignment.center)
+  gfx.drawTextAligned("Ⓐ  gas        Ⓑ  brake", cx, 96, kTextAlignment.center)
+  gfx.drawTextAligned("▲ / ▼    shift  HI / LO  gear", cx, 118, kTextAlignment.center)
+  gfx.drawTextAligned("dodge the palms & signs", cx, 140, kTextAlignment.center)
+
+  blink = (blink + 1) % 60
+  if blink < 42 then
+    gfx.drawTextAligned("PRESS Ⓐ TO START", cx, 186, kTextAlignment.center)
+  end
+  gfx.setImageDrawMode(gfx.kDrawModeCopy)
 end
 
 ----------------------------------------------------------------------
@@ -285,6 +324,15 @@ end
 function playdate.update()
   if mode == "title" then
     drawTitle()
+    Audio.titleUpdate()
+    if playdate.buttonJustPressed(playdate.kButtonA) then
+      mode = "ready"
+    end
+    return
+  end
+
+  if mode == "ready" then
+    drawReady()
     Audio.titleUpdate()
     if playdate.buttonJustPressed(playdate.kButtonA) then
       mode = "play"
