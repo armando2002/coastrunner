@@ -46,20 +46,3 @@ Source/
     palm.png  sign.png  bg.png
 gen_art.py      regenerates all PNG art (needs Python + Pillow)
 ```
-
-## Tuning knobs
-Feel lives in two clusters of constants:
-
-`main.lua` (physics):
-- `MAX_SPEED`, `LOW_CAP` — top speeds (overall / low gear)
-- `ACCEL_LOW`, `ACCEL_HIGH`, `BRAKING`, `DECEL` — pedal response
-- `CENTRIFUGAL` — how hard curves push you outward
-- `STEER_K` — crank sensitivity; `DPAD_STEER` — d-pad fallback rate
-- `OFF_CAP`, `OFF_DECEL` — off-road grip penalty
-
-`road.lua` (look & camera):
-- `ROAD_W`, `CAM_H`, `CAM_DEPTH` (FOV), `DRAW_DIST`
-- `SEG_LEN`, `RUMBLE` — segment length / stripe band size
-- `A_ROAD_*`, `A_GRASS_*` — dither "blackness" (0 = white, 1 = black). Road is
-  kept near-white so the solid-black car reads against it; grass is mid-gray.
-- `SPRITE_SCALE` — global roadside sprite size
