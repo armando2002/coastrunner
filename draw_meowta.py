@@ -46,25 +46,31 @@ def body_mask(sk):
     return m
 
 
+def draw_driver(img, d, x):
+    """Human driver: black hair, white face, sunglasses. Clearly person-sized."""
+    d.ellipse([x - 5, 8, x + 5, 19], fill=BLACK)      # head + hair
+    d.ellipse([x - 4, 12, x + 4, 19], fill=WHITE)     # face (lower half)
+    d.rectangle([x - 3, 14, x + 3, 15], fill=BLACK)   # sunglasses
+
+
 def draw_cat(img, d, x):
-    """Black tuxedo cat passenger: black head/ears with a white rim so it reads
-    against the dark cockpit, plus white muzzle, eyes and chest bib."""
-    # white rim (head + ears) so the black cat separates from the black cockpit
-    d.ellipse([x - 6, 8, x + 6, 19], fill=WHITE)
-    d.polygon([(x - 6, 12), (x - 5, 3), (x - 1, 10)], fill=WHITE)   # left ear rim
-    d.polygon([(x + 6, 12), (x + 5, 3), (x + 1, 10)], fill=WHITE)   # right ear rim
+    """Small black tuxedo cat in the passenger seat -- cat-sized, sits low."""
+    # white rim (head + ears) so the black cat reads against the dark cockpit
+    d.ellipse([x - 4, 13, x + 4, 20], fill=WHITE)
+    d.polygon([(x - 4, 16), (x - 3, 11), (x - 1, 14)], fill=WHITE)
+    d.polygon([(x + 4, 16), (x + 3, 11), (x + 1, 14)], fill=WHITE)
     # black head + ears
-    d.ellipse([x - 5, 9, x + 5, 18], fill=BLACK)
-    d.polygon([(x - 5, 11), (x - 4, 5), (x - 1, 10)], fill=BLACK)
-    d.polygon([(x + 5, 11), (x + 4, 5), (x + 1, 10)], fill=BLACK)
-    # eyes (white on the black face)
-    img.putpixel((x - 2, 12), WHITE)
-    img.putpixel((x + 2, 12), WHITE)
-    # white muzzle (tuxedo chin) + nose
-    d.ellipse([x - 3, 13, x + 3, 17], fill=WHITE)
-    img.putpixel((x, 14), BLACK)
-    # white chest bib spilling down into the cockpit
-    d.polygon([(x - 3, 17), (x + 3, 17), (x + 4, 22), (x - 4, 22)], fill=WHITE)
+    d.ellipse([x - 3, 14, x + 3, 19], fill=BLACK)
+    d.polygon([(x - 3, 15), (x - 2, 12), (x - 1, 14)], fill=BLACK)
+    d.polygon([(x + 3, 15), (x + 2, 12), (x + 1, 14)], fill=BLACK)
+    # eyes
+    img.putpixel((x - 1, 16), WHITE)
+    img.putpixel((x + 1, 16), WHITE)
+    # white muzzle + nose
+    d.ellipse([x - 2, 17, x + 2, 19], fill=WHITE)
+    img.putpixel((x, 18), BLACK)
+    # small white chest bib
+    d.polygon([(x - 2, 19), (x + 2, 19), (x + 2, 21), (x - 2, 21)], fill=WHITE)
 
 
 def build_frame(lean):
@@ -88,7 +94,7 @@ def build_frame(lean):
     # --- open cockpit (dark interior) ---
     d.rounded_rectangle([19 + sk, 12, 53 + sk, 21], radius=4, fill=BLACK)
 
-    # --- headrests (silver humps); right seat holds the cat when enabled ---
+    # --- occupants: human driver (left) always; cat or empty headrest (right) ---
     def headrest(hx):
         x0 = hx + sk
         d.ellipse([x0, 8, x0 + 8, 18], fill=BLACK)
@@ -97,9 +103,9 @@ def build_frame(lean):
                 if (xx2 + yy2) % 2 == 0:
                     img.putpixel((xx2, yy2), WHITE)
 
-    headrest(24)                       # driver headrest
+    draw_driver(img, d, 28 + sk)       # driver behind the wheel
     if SHOW_CAT:
-        draw_cat(img, d, 44 + sk)      # passenger: tuxedo cat
+        draw_cat(img, d, 45 + sk)      # passenger: small tuxedo cat
     else:
         headrest(40)
 
