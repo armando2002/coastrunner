@@ -67,11 +67,3 @@ Feel lives in two clusters of constants:
 The track itself is the sequence of `straight()/curve()` calls in `Road.build()`
 — edit those to reshape the course (args: length in segments, curve magnitude,
 elevation delta).
-
-## Notes / not-yet-done
-This was authored without a simulator on hand, so syntax is verified (Lua 5.4)
-but on-device feel will want a tuning pass — `STEER_K`, `CENTRIFUGAL`, and
-`SPRITE_SCALE` are the first three I'd adjust live. Obvious next additions: lap
-timer + checkpoints, opponent traffic cars (reuse the sprite renderer with a
-per-frame Z), a crash/spin state, and engine-pitch smoothing. Performance lever
-if frame rate dips: lower `DRAW_DIST` (120 → ~80).
