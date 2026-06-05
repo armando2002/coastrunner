@@ -63,7 +63,3 @@ Feel lives in two clusters of constants:
 - `A_ROAD_*`, `A_GRASS_*` — dither "blackness" (0 = white, 1 = black). Road is
   kept near-white so the solid-black car reads against it; grass is mid-gray.
 - `SPRITE_SCALE` — global roadside sprite size
-
-The track itself is the sequence of `straight()/curve()` calls in `Road.build()`
-— edit those to reshape the course (args: length in segments, curve magnitude,
-elevation delta).
