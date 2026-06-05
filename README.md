@@ -5,8 +5,7 @@ code, and synth audio — no Sega assets. The road uses the classic segment-
 projection technique (à la Lou's pseudo-3d road / jakesgordon's model), adapted
 to the 400×240 1-bit display.
 
-<img width="400" height="240" alt="meowta" src="https://github.com/user-attachments/assets/91b61adb-8d3d-482e-a16d-7f1bd5132dfc" />
-
+<img width="400" height="240" alt="meowta" src="https://github.com/user-attachments/assets/fda1f8c5-e87f-4fd2-8fc9-57fcfa574102" />
 
 ## Controls
 - **Crank** — steer (spin to turn; faster spin = sharper turn, scaled by speed)
