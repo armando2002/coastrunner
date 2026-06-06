@@ -8,7 +8,7 @@ with Mt. Rainier on the horizon. All original art, code, and synth audio — no
 third-party assets. The road uses the classic segment-projection technique (à la
 Lou's pseudo-3D road / jakesgordon's model), adapted to the 400×240 1-bit display.
 
-<img width="400" height="240" alt="Meowta Racer title" src="https://github.com/user-attachments/assets/fda1f8c5-e87f-4fd2-8fc9-57fcfa574102" />
+<img width="400" height="240" alt="meowtaracerdemo" src="https://github.com/user-attachments/assets/a9b85adb-056a-4bee-b89a-7ee220a428fc" />
 
 ## Play
 Title screen → **A** to start → a short *How To Drive* card → **A** to go.
