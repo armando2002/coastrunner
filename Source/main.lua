@@ -284,17 +284,16 @@ local function drawTitle()
   local s = 1.35
   img:drawScaled(HALF_W - (w * s) / 2, SCREEN_H - h * s - 22, s)
 
-  -- blinking prompt (white, sits on the dark grid)
+  -- blinking prompt (dark pill so it reads on the misty foreground)
   blink = (blink + 1) % 60
   if blink < 42 then
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRect(HALF_W - 80, SCREEN_H - 20, 160, 16)
     gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    gfx.drawTextAligned("PRESS Ⓐ TO START", HALF_W, SCREEN_H - 16, kTextAlignment.center)
+    gfx.drawTextAligned("PRESS Ⓐ TO START", HALF_W, SCREEN_H - 18, kTextAlignment.center)
     gfx.setImageDrawMode(gfx.kDrawModeCopy)
   end
 
-  gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-  gfx.drawText("© 2026 NWSW", 6, 6)
-  gfx.setImageDrawMode(gfx.kDrawModeCopy)
 end
 
 ----------------------------------------------------------------------
@@ -309,7 +308,7 @@ local function drawReady()
   gfx.drawTextAligned("CRANK  or  ◄ ►    steer", cx, 74, kTextAlignment.center)
   gfx.drawTextAligned("Ⓐ  gas        Ⓑ  brake", cx, 96, kTextAlignment.center)
   gfx.drawTextAligned("▲ / ▼    shift  HI / LO  gear", cx, 118, kTextAlignment.center)
-  gfx.drawTextAligned("dodge the palms & signs", cx, 140, kTextAlignment.center)
+  gfx.drawTextAligned("dodge the trees & signs", cx, 140, kTextAlignment.center)
 
   blink = (blink + 1) % 60
   if blink < 42 then
