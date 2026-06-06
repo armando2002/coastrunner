@@ -1,4 +1,4 @@
--- audio.lua -- original synth audio for CoastRunner (no sampled assets)
+-- audio.lua -- original synth audio for MeowtaRacer (no sampled assets)
 
 local snd <const> = playdate.sound
 Audio = {}  -- global: Playdate's import() does not return module values

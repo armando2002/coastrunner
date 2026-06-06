@@ -1,4 +1,4 @@
--- audio.lua -- CoastRunner synth audio v4: mono speaker mix + Splash-Wave-energy reference
+-- audio.lua -- MeowtaRacer synth audio v4: mono speaker mix + Splash-Wave-energy reference
 -- Drop-in replacement for Claude's existing audio.lua.
 --
 -- Built for the Playdate speaker, not headphones:

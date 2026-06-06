@@ -1,4 +1,4 @@
--- road.lua -- pseudo-3D road engine for CoastRunner
+-- road.lua -- pseudo-3D road engine for MeowtaRacer
 -- Technique: classic segment projection (Lou's / jakesgordon model) adapted to
 -- the Playdate's 400x240 1-bit display. Road is rendered near->far with a
 -- descending clip line so hills occlude correctly.
@@ -100,21 +100,25 @@ function Road.build()
 
   segments = {}; N = 0
 
-  straight(20, 0)
-  curve(30,  2,  40)     -- gentle right, slight climb
-  straight(15, 0)
-  curve(40, -3, -30)     -- sweeping left, descent
-  curve(20,  4,  0)      -- sharp right
-  straight(20, 60)       -- climb
-  curve(30, -2, -40)
-  curve(30,  2,  20)
-  straight(15, 0)
-  curve(40, -4,  50)     -- big left over a crest
-  curve(25,  3, -50)
-  straight(10, 0)
-  curve(30,  2,  30)
-  curve(30, -3, -20)
-  straight(25, 0)
+  -- A stage with distinct "movements" instead of uniform kinks:
+  straight(18, 0)         -- launch / build speed
+  curve(28,  2,  20)      -- gentle right kink, slight rise
+  straight(30, 0)         -- long fast straight
+  curve(45, -3, -40)      -- big sweeping left, descending
+  curve(45,  3,  40)      -- big sweeping right, climbing (S-pair with above)
+  straight(12, 95)        -- steep crest you climb and crest over
+  curve(16,  6,   0)      -- sharp right at the top
+  curve(16, -6,   0)      -- immediate sharp left (chicane)
+  curve(16,  5, -35)      -- sharp right, dropping away
+  straight(20, -45)       -- fast descent
+  curve(50, -2,   0)      -- long lazy left to breathe
+  straight(10, 55)        -- short climb
+  curve(22,  4,  30)      -- medium right over a rise
+  curve(30, -3, -65)      -- sweeping left, big drop
+  straight(28, 0)         -- recovery straight
+  curve(20,  5,  20)      -- late sharp right
+  curve(20, -5,  20)      -- sharp left (chicane 2)
+  straight(24, 0)         -- run to the finish
 
   -- darken last segments so the loop seam reads as a start/finish line
   for i=N-RUMBLE+1, N do segments[i].dark = true end
@@ -122,19 +126,22 @@ function Road.build()
   N = #segments
   trackLen = N * SEG_LEN
 
-  -- LEVEL 1: sparse roadside scatter so a new driver isn't punished.
-  -- Props sit beyond a free "shoulder": you can run wide onto the grass (speed
-  -- penalty only) and only crash if you actually line up with a trunk/post.
-  for i=1,N do
+  -- LEVEL 1 scatter: props live beyond a free shoulder (run wide = speed penalty
+  -- only). Hitboxes match the visible trunk, and offsets stay within reach so you
+  -- can't drive through a tree you're clearly touching. Two stretches go denser
+  -- for a "forest" feel; the rest stays open.
+  for i = 1, N do
     local s = segments[i]
-    if i % 22 == 0 then
-      addSprite(i, imgPalm, -1.7 - (i%3)*0.15, 0.16)   -- left, set back; trunk-width hitbox
-    elseif i % 22 == 11 then
-      addSprite(i, imgPalm,  1.7 + (i%3)*0.15, 0.16)    -- right
+    local dense = (i > N * 0.30 and i < N * 0.44) or (i > N * 0.72 and i < N * 0.86)
+    local spacing = dense and 9 or 20
+    if i % spacing == 0 then
+      addSprite(i, imgPalm, -1.5 - (i % 3) * 0.10, 0.30)        -- left
+    elseif i % spacing == (spacing // 2) then
+      addSprite(i, imgPalm,  1.5 + (i % 3) * 0.10, 0.30)        -- right
     end
-    -- an occasional chevron sign ahead of a real curve change
-    if i < N and math.abs(segments[i+1].curve - s.curve) > 2.0 and i % 17 == 0 then
-      addSprite(i, imgSign, s.curve > 0 and 1.5 or -1.5, 0.18)
+    -- chevron sign just before a real curve change
+    if i < N and math.abs(segments[i + 1].curve - s.curve) > 2.5 and i % 9 == 0 then
+      addSprite(i, imgSign, s.curve > 0 and 1.35 or -1.35, 0.26)
     end
   end
 end
@@ -150,13 +157,18 @@ function Road.segmentAt(z)
   return segments[segIndexAt(z) + 1]
 end
 
--- returns (true, sprite) if the player at (z, playerX) overlaps a collidable prop
+-- returns (true, sprite) if the player at (z, playerX) overlaps a collidable prop.
+-- Scans the current segment and the one just ahead so a fast frame can't skip a hit.
 function Road.collisionAt(z, playerX)
-  local seg = segments[segIndexAt(z) + 1]
-  if not seg or not seg.sprites then return false end
-  for _,spr in ipairs(seg.sprites) do
-    if spr.hitW and math.abs(playerX - spr.offset) < spr.hitW then
-      return true, spr
+  local base = segIndexAt(z)
+  for d = 0, 1 do
+    local seg = segments[((base + d) % N) + 1]
+    if seg and seg.sprites then
+      for _, spr in ipairs(seg.sprites) do
+        if spr.hitW and math.abs(playerX - spr.offset) < spr.hitW then
+          return true, spr
+        end
+      end
     end
   end
   return false

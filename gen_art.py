@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate 1-bit PNG art for CoastRunner (Playdate).
+"""Generate 1-bit PNG art for MeowtaRacer (Playdate).
 Convention: pure black (0,0,0,255) = black pixel, white (255,255,255,255) = white,
 alpha 0 = transparent. Playdate importer keys off luminance/alpha thresholds.
 """

@@ -1,4 +1,4 @@
-# Coast Runner
+# Meowta Racer
 
 An OutRun-style pseudo-3D arcade racer for the Playdate, in Lua. Original art,
 code, and synth audio — no Sega assets. The road uses the classic segment-
@@ -25,9 +25,9 @@ straights — just like the arcade.
 Requires the [Playdate SDK](https://play.date/dev/) (`pdc` on your PATH).
 
 ```bash
-pdc Source CoastRunner.pdx
+pdc Source MeowtaRacer.pdx
 # then open in the simulator:
-open CoastRunner.pdx          # macOS
+open MeowtaRacer.pdx          # macOS
 # or: Playdate Simulator > File > Open
 ```
 

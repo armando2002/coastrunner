@@ -1,6 +1,6 @@
 name=Meowta Racer
 author=nwsw
 description=An 80s-style pseudo-3D arcade racer. Crank or d-pad to steer, A/B gas & brake, d-pad to shift HI/LO.
-bundleID=com.nwsw.coastrunner
+bundleID=com.nwsw.meowtaracer
 version=0.1
 buildNumber=1
