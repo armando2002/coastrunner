@@ -34,9 +34,16 @@ local CRASH_FRAMES <const> = 32        -- ~1.05s tumble after hitting a prop
 local CRASH_SPIN   <const> = 900        -- total degrees of cartwheel
 
 ----------------------------------------------------------------------
+-- Stage / timer tunables (OutRun-style branching run)
+----------------------------------------------------------------------
+local STAGES     <const> = 5           -- checkpoints deep
+local STAGE_TIME <const> = 70          -- seconds on the clock at start
+local EXTEND     <const> = 35          -- seconds added at each checkpoint
+
+----------------------------------------------------------------------
 -- State
 ----------------------------------------------------------------------
-local mode = "title"      -- "title" | "ready" | "play"
+local mode = "title"      -- "title" | "ready" | "play" | "finish" | "timeup"
 local position = 0
 local playerX  = 0
 local speed    = 0
@@ -51,6 +58,12 @@ local crashing  = false   -- in a crash tumble?
 local crashT    = 0       -- frames left in the crash
 local crashSpin = 0       -- accumulated tumble angle (degrees)
 local damage    = 0       -- collisions this run
+
+local stage    = 1        -- current stage (1..STAGES)
+local rights   = 0        -- hard-route choices taken
+local route    = {}       -- "L"/"R" history
+local timeLeft = STAGE_TIME
+local bannerText, bannerT = nil, 0   -- transient centre banner (checkpoint etc.)
 
 local bg, bgW, bgH
 local bgX = 0
@@ -69,7 +82,7 @@ local function setup()
   bgW, bgH = bg:getSize()
   player = gfx.imagetable.new("images/meowta")
   titleImg = gfx.image.new("images/title")
-  Road.build()
+  Road.build(1, 0)
   Audio.init()
   Audio.titleStart()
 end
@@ -79,6 +92,32 @@ local function resetRun()
   steerVis, shake, distance = 0, 0, 0
   crashing, crashT, crashSpin, damage = false, 0, 0, 0
   steerInput = "none"
+  stage, rights, route = 1, 0, {}
+  timeLeft = STAGE_TIME
+  bannerText, bannerT = "STAGE 1", 40
+  Road.build(1, 0)
+end
+
+----------------------------------------------------------------------
+-- Stage flow: crossing the fork line picks the next branch
+----------------------------------------------------------------------
+local function finishStage()
+  local choice = (playerX >= 0) and "R" or "L"
+  route[#route + 1] = choice
+  if choice == "R" then rights = rights + 1 end
+  stage = stage + 1
+  if stage > STAGES then
+    mode = "finish"
+    Audio.engineSilence()
+    return
+  end
+  Road.build(stage, rights)
+  position = 0
+  playerX = (choice == "R") and 0.4 or -0.4   -- carry your line into the new road
+  timeLeft = timeLeft + EXTEND
+  bannerText = "CHECKPOINT!  +" .. EXTEND .. "s"
+  bannerT = 45
+  Audio.blip(880, 0.12)
 end
 
 ----------------------------------------------------------------------
@@ -111,10 +150,35 @@ local function drawHud()
   local w = math.floor((speed / MAX_SPEED) * 96)
   gfx.fillRect(SCREEN_W-100, 4, w, 8)
 
-  -- damage tally (top centre)
-  gfx.setColor(gfx.kColorWhite); gfx.fillRect(HALF_W-34, 2, 68, 16)
-  gfx.setColor(gfx.kColorBlack); gfx.drawRect(HALF_W-34, 2, 68, 16)
-  gfx.drawTextAligned("DMG " .. damage, HALF_W, 4, kTextAlignment.center)
+  -- stage + damage (under the speed bar)
+  gfx.setColor(gfx.kColorWhite); gfx.fillRect(SCREEN_W-102, 16, 100, 14)
+  gfx.setColor(gfx.kColorBlack); gfx.drawRect(SCREEN_W-102, 16, 100, 14)
+  gfx.drawText("ST " .. stage .. "/" .. STAGES .. "  DMG " .. damage, SCREEN_W-98, 17)
+
+  -- TIME (top centre, the OutRun clock)
+  local t = math.max(0, math.ceil(timeLeft))
+  gfx.setColor(gfx.kColorWhite); gfx.fillRect(HALF_W-38, 2, 76, 18)
+  gfx.setColor(gfx.kColorBlack); gfx.drawRect(HALF_W-38, 2, 76, 18)
+  gfx.drawTextAligned("TIME *" .. t .. "*", HALF_W, 5, kTextAlignment.center)
+
+  -- fork hint while in the widening fork zone
+  if position >= Road.forkStart() then
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRect(HALF_W-92, 26, 184, 16)
+    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+    gfx.drawTextAligned("◄ EASY        HARD ►", HALF_W, 28, kTextAlignment.center)
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+  end
+
+  -- transient banner (STAGE n / CHECKPOINT)
+  if bannerT > 0 then
+    bannerT = bannerT - 1
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRect(HALF_W-95, 60, 190, 18)
+    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+    gfx.drawTextAligned(bannerText, HALF_W, 63, kTextAlignment.center)
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+  end
 
   -- crank-docked warning: only when the player isn't already steering with the d-pad
   if playdate.isCrankDocked() and steerInput ~= "dpad" then
@@ -213,16 +277,18 @@ local function updateDriving()
   -- centrifugal force on curves
   playerX = playerX - (seg.curve * speedPercent * CENTRIFUGAL)
 
-  -- off-road penalty
-  local offRoad = math.abs(playerX) > 0.98
+  -- off-road penalty (road may be widened in the fork zone)
+  local wmul = Road.widthAt(position)
+  local offRoad = math.abs(playerX) > wmul * 0.98
   if offRoad and speed > OFF_CAP then
     speed = speed + OFF_DECEL * DT
     shake = 4
   else
     if shake > 0 then shake = shake - 1 end
   end
-  if playerX < -1.9 then playerX = -1.9 end
-  if playerX >  1.9 then playerX =  1.9 end
+  local clamp = math.max(1.9, wmul * 0.95)
+  if playerX < -clamp then playerX = -clamp end
+  if playerX >  clamp then playerX =  clamp end
 
   -- collision with a roadside prop -> enter crash tumble
   if Road.collisionAt(position, playerX) then
@@ -236,8 +302,21 @@ local function updateDriving()
     return
   end
 
-  -- advance
-  position = (position + speed * DT) % Road.length()
+  -- clock
+  timeLeft = timeLeft - DT
+  if timeLeft <= 0 then
+    timeLeft = 0
+    mode = "timeup"
+    Audio.engineSilence()
+    return
+  end
+
+  -- advance; crossing the end of the stage = the fork line
+  position = position + speed * DT
+  if position >= Road.length() then
+    finishStage()
+    return
+  end
   distance = distance + speed * DT
   if distance > bestDist then bestDist = distance end
 
@@ -255,10 +334,19 @@ local function updateCrash()
   crashT = crashT - 1
   crashSpin = crashSpin + (CRASH_SPIN / CRASH_FRAMES)
 
+  -- the clock doesn't stop for a wreck
+  timeLeft = timeLeft - DT
+  if timeLeft <= 0 then
+    timeLeft = 0
+    mode = "timeup"
+    Audio.engineSilence()
+    return
+  end
+
   -- bleed to a crawl but keep inching forward so we clear the prop
   speed = speed + (DECEL * 2) * DT
   if speed < MAX_SPEED * 0.05 then speed = MAX_SPEED * 0.05 end
-  position = (position + speed * DT) % Road.length()
+  position = math.min(position + speed * DT, Road.length() - 1)
   shake = 5
 
   Audio.engineUpdate(speed / MAX_SPEED, 1, true)
@@ -309,10 +397,50 @@ local function drawReady()
   gfx.drawTextAligned("Ⓐ  gas        Ⓑ  brake", cx, 96, kTextAlignment.center)
   gfx.drawTextAligned("▲ / ▼    shift  HI / LO  gear", cx, 118, kTextAlignment.center)
   gfx.drawTextAligned("dodge the trees & signs", cx, 140, kTextAlignment.center)
+  gfx.drawTextAligned("beat the clock to each fork:", cx, 158, kTextAlignment.center)
+  gfx.drawTextAligned("◄ easy route   ·   hard route ►", cx, 172, kTextAlignment.center)
 
   blink = (blink + 1) % 60
   if blink < 42 then
-    gfx.drawTextAligned("PRESS Ⓐ TO START", cx, 186, kTextAlignment.center)
+    gfx.drawTextAligned("PRESS Ⓐ TO START", cx, 200, kTextAlignment.center)
+  end
+  gfx.setImageDrawMode(gfx.kDrawModeCopy)
+end
+
+----------------------------------------------------------------------
+-- End screens: GOAL (route + rank) and TIME UP
+----------------------------------------------------------------------
+local function routeString()
+  return (#route > 0) and table.concat(route, " - ") or "—"
+end
+
+local function drawFinish()
+  gfx.clear(gfx.kColorBlack)
+  gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+  local cx = HALF_W
+  gfx.drawTextAligned("*G O A L !*", cx, 36, kTextAlignment.center)
+  -- rank: all-left = A (scenic), all-right = E (white-knuckle)
+  local rank = string.char(65 + rights)
+  gfx.drawTextAligned("GOAL  *" .. rank .. "*", cx, 78, kTextAlignment.center)
+  gfx.drawTextAligned("ROUTE:  " .. routeString(), cx, 104, kTextAlignment.center)
+  gfx.drawTextAligned("HARD ROUTES: " .. rights .. "/" .. (STAGES - 1) .. "    DMG: " .. damage, cx, 128, kTextAlignment.center)
+  blink = (blink + 1) % 60
+  if blink < 42 then
+    gfx.drawTextAligned("PRESS Ⓐ", cx, 186, kTextAlignment.center)
+  end
+  gfx.setImageDrawMode(gfx.kDrawModeCopy)
+end
+
+local function drawTimeup()
+  gfx.clear(gfx.kColorBlack)
+  gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+  local cx = HALF_W
+  gfx.drawTextAligned("*T I M E   U P*", cx, 48, kTextAlignment.center)
+  gfx.drawTextAligned("reached stage " .. stage .. " of " .. STAGES, cx, 90, kTextAlignment.center)
+  gfx.drawTextAligned("ROUTE:  " .. routeString(), cx, 114, kTextAlignment.center)
+  blink = (blink + 1) % 60
+  if blink < 42 then
+    gfx.drawTextAligned("PRESS Ⓐ", cx, 186, kTextAlignment.center)
   end
   gfx.setImageDrawMode(gfx.kDrawModeCopy)
 end
@@ -337,6 +465,22 @@ function playdate.update()
       mode = "play"
       resetRun()
       Audio.titleStop()
+    end
+    return
+  end
+
+  if mode == "finish" then
+    drawFinish()
+    if playdate.buttonJustPressed(playdate.kButtonA) then
+      mode = "title"; Audio.titleStart()
+    end
+    return
+  end
+
+  if mode == "timeup" then
+    drawTimeup()
+    if playdate.buttonJustPressed(playdate.kButtonA) then
+      mode = "title"; Audio.titleStart()
     end
     return
   end

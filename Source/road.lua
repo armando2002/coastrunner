@@ -34,6 +34,8 @@ local DITHER   <const> = gfx.image.kDitherTypeBayer8x8
 local segments = {}
 local N = 0
 local trackLen = 0
+local forkStartZ = 0                  -- z where the fork zone begins
+local FORK_SEGS <const> = 24          -- segments of widening road at stage end
 
 local imgPalm, imgSign
 
@@ -56,7 +58,7 @@ local function lastY()
   return segments[N].p2.world.y
 end
 
-local function addSegment(curve, y)
+local function addSegment(curve, y, w1, w2)
   local n = N
   local prevY = lastY()
   N = N + 1
@@ -65,6 +67,7 @@ local function addSegment(curve, y)
     curve = curve,
     dark  = (math.floor(n / RUMBLE) % 2) == 1,
     sprites = nil,
+    w1 = w1 or 1, w2 = w2 or 1,        -- road width multipliers (fork widening)
     p1 = { world={x=0,y=prevY,z=n*SEG_LEN},     camera={x=0,y=0,z=0}, screen={x=0,y=0,w=0,scale=0} },
     p2 = { world={x=0,y=y,    z=(n+1)*SEG_LEN}, camera={x=0,y=0,z=0}, screen={x=0,y=0,w=0,scale=0} },
   }
@@ -94,57 +97,85 @@ local function addSprite(segIndex, img, offset, hitW)
   s.sprites[#s.sprites+1] = { img=img, offset=offset, hitW=hitW }
 end
 
-function Road.build()
-  imgPalm = gfx.image.new("images/palm")
-  imgSign = gfx.image.new("images/sign")
+----------------------------------------------------------------------
+-- Stage generation (OutRun-style branching)
+-- Road.build(depth, rights): depth = stage number 1..5, rights = number of
+-- "hard" (right) choices taken so far. Difficulty scales curve sharpness,
+-- hills, and tree density. Each (depth, rights) pair is seeded, so every
+-- route through the tree is its own consistent stage.
+-- The stage ends in a FORK: the road widens around a divider -- exit on the
+-- LEFT side for the easier next stage, RIGHT for the harder one.
+----------------------------------------------------------------------
+function Road.build(depth, rights)
+  depth  = depth or 1
+  rights = rights or 0
+  imgPalm = imgPalm or gfx.image.new("images/palm")
+  imgSign = imgSign or gfx.image.new("images/sign")
 
   segments = {}; N = 0
+  math.randomseed(1000 + depth * 71 + rights * 137)
+  local diff = rights + (depth - 1) * 0.5        -- 0 .. ~6 across the tree
+  local function R(a, b) return math.random(a, b) end
 
-  -- A stage with distinct "movements" instead of uniform kinks:
-  straight(18, 0)         -- launch / build speed
-  curve(28,  2,  20)      -- gentle right kink, slight rise
-  straight(30, 0)         -- long fast straight
-  curve(45, -3, -40)      -- big sweeping left, descending
-  curve(45,  3,  40)      -- big sweeping right, climbing (S-pair with above)
-  straight(12, 95)        -- steep crest you climb and crest over
-  curve(16,  6,   0)      -- sharp right at the top
-  curve(16, -6,   0)      -- immediate sharp left (chicane)
-  curve(16,  5, -35)      -- sharp right, dropping away
-  straight(20, -45)       -- fast descent
-  curve(50, -2,   0)      -- long lazy left to breathe
-  straight(10, 55)        -- short climb
-  curve(22,  4,  30)      -- medium right over a rise
-  curve(30, -3, -65)      -- sweeping left, big drop
-  straight(28, 0)         -- recovery straight
-  curve(20,  5,  20)      -- late sharp right
-  curve(20, -5,  20)      -- sharp left (chicane 2)
-  straight(24, 0)         -- run to the finish
+  straight(12, 0)                                 -- launch
+  local budget = 360 + depth * 18                 -- stage length (movement units)
+  while budget > 0 do
+    local pick = R(1, 10)
+    local dir = (R(0, 1) == 0) and 1 or -1
+    if pick <= 3 then                             -- breathing straight
+      local l = R(12, 24); straight(l, R(-1, 1) * R(0, 30)); budget = budget - l
+    elseif pick <= 6 then                         -- sweeper
+      local l = R(26, 40)
+      curve(l, dir * (2 + R(0, 1) + math.floor(diff * 0.6)), R(-1, 1) * R(20, 55))
+      budget = budget - l
+    elseif pick <= 8 then                         -- chicane (sharper with difficulty)
+      local c = 4 + math.floor(diff)
+      curve(13, dir * c, 0); curve(13, -dir * c, 0)
+      budget = budget - 26
+    else                                          -- crest + drop-away curve
+      straight(9, 55 + diff * 12)
+      curve(14, dir * (3 + math.floor(diff * 0.8)), -(30 + diff * 8))
+      budget = budget - 23
+    end
+  end
+  straight(8, 0)                                  -- settle before the fork
 
-  -- darken last segments so the loop seam reads as a start/finish line
-  for i=N-RUMBLE+1, N do segments[i].dark = true end
+  -- FORK ZONE: road widens to ~2.2x around a divider of signs.
+  local preFork = N
+  for n = 0, FORK_SEGS - 1 do
+    local wa = 1 + 1.2 * (n / FORK_SEGS)
+    local wb = 1 + 1.2 * ((n + 1) / FORK_SEGS)
+    addSegment(0, lastY(), wa, wb)
+  end
+  forkStartZ = preFork * SEG_LEN
+  -- divider: a line of signs down the centre (hit it and you crash)
+  for i = preFork + 8, N, 3 do
+    addSprite(i, imgSign, 0, 0.20)
+  end
+  -- checkpoint line: darken the final band
+  for i = N - RUMBLE + 1, N do segments[i].dark = true end
 
-  N = #segments
   trackLen = N * SEG_LEN
 
-  -- LEVEL 1 scatter: props live beyond a free shoulder (run wide = speed penalty
-  -- only). Hitboxes match the visible trunk, and offsets stay within reach so you
-  -- can't drive through a tree you're clearly touching. Two stretches go denser
-  -- for a "forest" feel; the rest stays open.
-  for i = 1, N do
+  -- roadside scatter: denser with difficulty; none inside the fork zone
+  local spacing0 = math.max(8, 20 - math.floor(diff * 2))
+  for i = 1, preFork do
     local s = segments[i]
-    local dense = (i > N * 0.30 and i < N * 0.44) or (i > N * 0.72 and i < N * 0.86)
-    local spacing = dense and 9 or 20
+    local dense = (i > preFork * 0.30 and i < preFork * 0.44)
+               or (i > preFork * 0.72 and i < preFork * 0.86)
+    local spacing = dense and math.max(6, spacing0 - 8) or spacing0
     if i % spacing == 0 then
-      addSprite(i, imgPalm, -1.5 - (i % 3) * 0.10, 0.30)        -- left
+      addSprite(i, imgPalm, -1.5 - (i % 3) * 0.10, 0.30)
     elseif i % spacing == (spacing // 2) then
-      addSprite(i, imgPalm,  1.5 + (i % 3) * 0.10, 0.30)        -- right
+      addSprite(i, imgPalm,  1.5 + (i % 3) * 0.10, 0.30)
     end
-    -- chevron sign just before a real curve change
-    if i < N and math.abs(segments[i + 1].curve - s.curve) > 2.5 and i % 9 == 0 then
+    if i < preFork and math.abs(segments[i + 1].curve - s.curve) > 2.5 and i % 9 == 0 then
       addSprite(i, imgSign, s.curve > 0 and 1.35 or -1.35, 0.26)
     end
   end
 end
+
+function Road.forkStart() return forkStartZ end
 
 function Road.length() return trackLen end
 
@@ -155,6 +186,14 @@ end
 -- returns the segment table the camera/player is currently over
 function Road.segmentAt(z)
   return segments[segIndexAt(z) + 1]
+end
+
+-- road width multiplier at z (1 = normal, up to ~2.2 in the fork)
+function Road.widthAt(z)
+  local s = segments[segIndexAt(z) + 1]
+  if not s then return 1 end
+  local p = (z % SEG_LEN) / SEG_LEN
+  return s.w1 + (s.w2 - s.w1) * p
 end
 
 -- returns (true, sprite) if the player at (z, playerX) overlaps a collidable prop.
@@ -289,6 +328,8 @@ function Road.render(position, playerX)
 
     project(s.p1, camX - x,        camY, camZ)
     project(s.p2, camX - x - dx,   camY, camZ)
+    s.p1.screen.w = s.p1.screen.w * s.w1   -- fork-zone widening
+    s.p2.screen.w = s.p2.screen.w * s.w2
     x  = x + dx
     dx = dx + s.curve
 
